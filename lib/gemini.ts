@@ -1,8 +1,12 @@
+import { randomUUID } from "crypto";
+import { writeFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import path from "path";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleAIFileManager } from "@google/generative-ai/server";
 import { z } from "zod";
-import type { Sport, AnalysisVerdict } from "@/types";
+import type { AnalysisVerdict, Sport } from "@/types";
 
-// Fail fast if key is missing
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 if (!apiKey) {
   throw new Error(
@@ -11,8 +15,20 @@ if (!apiKey) {
 }
 
 const genAI = new GoogleGenerativeAI(apiKey);
+const fileManager = new GoogleAIFileManager(apiKey);
 
-// Zod schema for Gemini response validation
+interface GeminiVideoFile {
+  uri: string;
+  mimeType: string;
+}
+
+interface GeminiUploadedFile {
+  name: string;
+  uri: string;
+  mimeType?: string;
+  state?: string;
+}
+
 export const VerdictSchema = z.object({
   verdict: z.enum(["FAIR", "BAD"]),
   confidence: z.number().min(0).max(100),
@@ -22,9 +38,77 @@ export const VerdictSchema = z.object({
 
 const SPORTS: Sport[] = ["basketball", "soccer", "baseball", "football", "hockey"];
 
-// Pass 1 — Sport detection
-export async function detectSport(videoUrl: string): Promise<Sport> {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+const PROMPT_LOADERS: Record<Sport, () => Promise<{ systemPrompt: string }>> = {
+  basketball: () => import("@/lib/prompts/basketball"),
+  soccer: () => import("@/lib/prompts/soccer"),
+  baseball: () => import("@/lib/prompts/baseball"),
+  football: () => import("@/lib/prompts/football"),
+  hockey: () => import("@/lib/prompts/hockey"),
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function getModelName() {
+  return process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
+}
+
+async function waitForGeminiFile(uploadedFile: GeminiUploadedFile): Promise<GeminiVideoFile> {
+  let file = uploadedFile;
+
+  while (file.state === "PROCESSING") {
+    await sleep(1500);
+    file = (await fileManager.getFile(file.name)) as GeminiUploadedFile;
+  }
+
+  if (file.state === "FAILED") {
+    throw new Error("Gemini failed to process the uploaded video");
+  }
+
+  return {
+    uri: file.uri,
+    mimeType: file.mimeType ?? uploadedFile.mimeType ?? "video/mp4",
+  };
+}
+
+async function uploadVideoToGemini(
+  bytes: ArrayBuffer,
+  mimeType: string,
+  displayName: string
+): Promise<GeminiVideoFile> {
+  const extension = mimeType.split("/")[1]?.replace("quicktime", "mov") ?? "mp4";
+  const tempPath = path.join(tmpdir(), `refcheck-${randomUUID()}.${extension}`);
+
+  await writeFile(tempPath, Buffer.from(bytes));
+
+  try {
+    const uploadResult = await fileManager.uploadFile(tempPath, {
+      mimeType,
+      displayName,
+    });
+
+    return await waitForGeminiFile(uploadResult.file as GeminiUploadedFile);
+  } finally {
+    await unlink(tempPath).catch(() => undefined);
+  }
+}
+
+async function uploadBrowserFileToGemini(file: File): Promise<GeminiVideoFile> {
+  return uploadVideoToGemini(await file.arrayBuffer(), file.type || "video/mp4", file.name);
+}
+
+async function uploadUrlToGemini(videoUrl: string): Promise<GeminiVideoFile> {
+  const response = await fetch(videoUrl);
+
+  if (!response.ok) {
+    throw new Error(`Could not fetch video URL for Gemini upload: ${response.status}`);
+  }
+
+  const mimeType = response.headers.get("content-type") ?? "video/mp4";
+  return uploadVideoToGemini(await response.arrayBuffer(), mimeType, "uploaded-video");
+}
+
+export async function detectSport(videoFile: GeminiVideoFile): Promise<Sport> {
+  const model = genAI.getGenerativeModel({ model: getModelName() });
 
   const prompt = `Watch this sports video clip and identify which sport is being played.
 Respond with ONLY one of these exact words (lowercase): basketball, soccer, baseball, football, hockey
@@ -34,14 +118,14 @@ Do not include any other text.`;
     { text: prompt },
     {
       fileData: {
-        mimeType: "video/mp4",
-        fileUri: videoUrl,
+        mimeType: videoFile.mimeType,
+        fileUri: videoFile.uri,
       },
     },
   ]);
 
   const raw = result.response.text().trim().toLowerCase();
-  const detected = SPORTS.find((s) => raw.includes(s));
+  const detected = SPORTS.find((sport) => raw.includes(sport));
 
   if (!detected) {
     throw new Error(`Could not detect sport from video. Model returned: ${raw}`);
@@ -50,35 +134,36 @@ Do not include any other text.`;
   return detected;
 }
 
-// Pass 2 — Full rule-grounded analysis
 export async function analyzeCall(
-  videoUrl: string,
+  videoFile: GeminiVideoFile,
   sport: Sport
 ): Promise<AnalysisVerdict> {
-  // Dynamically import sport-specific rulebook prompt
-  const { systemPrompt } = await import(`@/lib/prompts/${sport}`);
+  const { systemPrompt } = await PROMPT_LOADERS[sport]();
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: getModelName(),
     systemInstruction: systemPrompt,
   });
 
-  const userPrompt = `Analyze this ${sport} video clip and determine if the officiating call was correct.
+  const userPrompt = `Analyze this ${sport} video clip and decide whether the play should be considered legal or illegal under the rules provided in the system prompt.
+
+Use the JSON verdict values this app expects:
+- "FAIR" means the play/call/no-call is legal or correct.
+- "BAD" means the play is illegal, a violation/foul occurred, or the call/no-call was wrong.
+
 Return ONLY a valid JSON object matching the required schema. No markdown, no preamble.`;
 
   const result = await model.generateContent([
     { text: userPrompt },
     {
       fileData: {
-        mimeType: "video/mp4",
-        fileUri: videoUrl,
+        mimeType: videoFile.mimeType,
+        fileUri: videoFile.uri,
       },
     },
   ]);
 
   const raw = result.response.text().trim();
-
-  // Strip markdown code fences if model includes them despite instructions
   const cleaned = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
 
   let parsed: unknown;
@@ -98,12 +183,22 @@ Return ONLY a valid JSON object matching the required schema. No markdown, no pr
   return validated.data;
 }
 
-// Two-pass pipeline — main entry point
+export async function runAnalysisPipelineForFile(file: File): Promise<{
+  sport: Sport;
+  verdict: AnalysisVerdict;
+}> {
+  const videoFile = await uploadBrowserFileToGemini(file);
+  const sport = await detectSport(videoFile);
+  const verdict = await analyzeCall(videoFile, sport);
+  return { sport, verdict };
+}
+
 export async function runAnalysisPipeline(videoUrl: string): Promise<{
   sport: Sport;
   verdict: AnalysisVerdict;
 }> {
-  const sport = await detectSport(videoUrl);
-  const verdict = await analyzeCall(videoUrl, sport);
+  const videoFile = await uploadUrlToGemini(videoUrl);
+  const sport = await detectSport(videoFile);
+  const verdict = await analyzeCall(videoFile, sport);
   return { sport, verdict };
 }
