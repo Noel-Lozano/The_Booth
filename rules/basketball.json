@@ -1,0 +1,81 @@
+[
+  {
+    "id": "basketball-blocking-foul",
+    "sport": "basketball",
+    "rule_name": "Blocking Foul",
+    "foul_type": "personal_foul",
+    "plain_english_summary": "A defender illegally impedes an opponent's movement without establishing or maintaining legal guarding position.",
+    "criteria_checklist": [
+      "Defender is moving into the opponent's path at or after contact",
+      "Defender does not establish legal guarding position before contact",
+      "Contact meaningfully affects the ball handler's speed, balance, rhythm, or path"
+    ],
+    "official_rule_reference": "NBA Rule 12, Section II - Personal Fouls; Blocking"
+  },
+  {
+    "id": "basketball-charging-foul",
+    "sport": "basketball",
+    "rule_name": "Charging Foul",
+    "foul_type": "offensive_foul",
+    "plain_english_summary": "An offensive player with or without the ball illegally runs into or pushes through a defender who has legal guarding position.",
+    "criteria_checklist": [
+      "Defender establishes legal guarding position before contact",
+      "Offensive player initiates significant torso contact",
+      "Defender is not moving forward into the opponent at the moment of contact"
+    ],
+    "official_rule_reference": "NBA Rule 12, Section II - Personal Fouls; Charging"
+  },
+  {
+    "id": "basketball-traveling",
+    "sport": "basketball",
+    "rule_name": "Traveling Violation",
+    "foul_type": "violation",
+    "plain_english_summary": "A player takes too many steps after gathering the ball or illegally moves the pivot foot without dribbling.",
+    "criteria_checklist": [
+      "Player gathers or controls the ball",
+      "Player takes more than the allowed steps before passing, shooting, or dribbling",
+      "Pivot foot is lifted and returned to the floor before releasing the ball"
+    ],
+    "official_rule_reference": "NBA Rule 10, Section XIII - Traveling"
+  },
+  {
+    "id": "basketball-illegal-use-of-hands",
+    "sport": "basketball",
+    "rule_name": "Illegal Use of Hands",
+    "foul_type": "personal_foul",
+    "plain_english_summary": "A player uses hands or arms to hold, push, check, or redirect an opponent illegally.",
+    "criteria_checklist": [
+      "Defender places hands or arms on opponent",
+      "Contact restricts, redirects, holds, or slows the opponent",
+      "Contact is not incidental to a normal basketball play"
+    ],
+    "official_rule_reference": "NBA Rule 12, Section II - Illegal Use of Hands"
+  },
+  {
+    "id": "basketball-goaltending",
+    "sport": "basketball",
+    "rule_name": "Goaltending",
+    "foul_type": "violation",
+    "plain_english_summary": "A player illegally touches a shot while it is descending toward the basket and has a chance to score.",
+    "criteria_checklist": [
+      "Ball is on its downward flight",
+      "Ball is above rim level",
+      "Ball has a chance to enter the basket",
+      "Player touches the ball before it legally misses or scores"
+    ],
+    "official_rule_reference": "NBA Rule 11 - Goaltending and Basket Interference"
+  },
+  {
+    "id": "basketball-flagrant-foul",
+    "sport": "basketball",
+    "rule_name": "Flagrant Foul",
+    "foul_type": "flagrant_foul",
+    "plain_english_summary": "A player commits unnecessary or excessive contact against an opponent.",
+    "criteria_checklist": [
+      "Contact is unnecessary for a normal basketball play",
+      "Contact is excessive, dangerous, or targets a vulnerable opponent",
+      "Impact level, wind-up, follow-through, or body area increases severity"
+    ],
+    "official_rule_reference": "NBA Rule 12, Section II - Flagrant Fouls"
+  }
+]
