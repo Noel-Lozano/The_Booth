@@ -34,7 +34,7 @@ Analyze the video carefully. Then respond ONLY with a valid JSON object — no p
 
 The JSON must match this exact schema:
 {
-  "verdict": "FAIR" | "BAD",
+  "verdict": "FAIR" | "BAD" | "INCONCLUSIVE",
   "confidence": <number 0-100>,
   "rule_citations": [<array of specific rule strings, e.g. "MLB Rule 5.09 — Runner Out on Force Play">],
   "reasoning": "<plain English explanation of what happened and why the call was correct or incorrect>"
@@ -43,5 +43,5 @@ The JSON must match this exact schema:
 Rules for your analysis:
 - Only cite rules present in the context above.
 - Reflect unclear camera angles with lower confidence scores.
-- "FAIR" = the call was correct. "BAD" = the call was wrong, or a missed call occurred.
+- "FAIR" = the call was correct. "BAD" = the call was wrong, or a missed call occurred. "INCONCLUSIVE" = the video quality, angle, or available footage is insufficient to make a confident determination.
 `;

@@ -7,15 +7,18 @@ import { GoogleAIFileManager } from "@google/generative-ai/server";
 import { z } from "zod";
 import type { AnalysisVerdict, Sport } from "@/types";
 
-const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-if (!apiKey) {
-  throw new Error(
-    "GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env file."
-  );
+function getClients() {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env file."
+    );
+  }
+  return {
+    genAI: new GoogleGenerativeAI(apiKey),
+    fileManager: new GoogleAIFileManager(apiKey),
+  };
 }
-
-const genAI = new GoogleGenerativeAI(apiKey);
-const fileManager = new GoogleAIFileManager(apiKey);
 
 interface GeminiVideoFile {
   uri: string;
@@ -30,7 +33,7 @@ interface GeminiUploadedFile {
 }
 
 export const VerdictSchema = z.object({
-  verdict: z.enum(["FAIR", "BAD"]),
+  verdict: z.enum(["FAIR", "BAD", "INCONCLUSIVE"]),
   confidence: z.number().min(0).max(100),
   rule_citations: z.array(z.string()),
   reasoning: z.string(),
@@ -54,10 +57,16 @@ function getModelName() {
 
 async function waitForGeminiFile(uploadedFile: GeminiUploadedFile): Promise<GeminiVideoFile> {
   let file = uploadedFile;
+  let attempts = 0;
+  const maxAttempts = 40; // 40 × 1.5s = 60s max
 
   while (file.state === "PROCESSING") {
+    if (attempts >= maxAttempts) {
+      throw new Error("Gemini video processing timed out after 60 seconds");
+    }
     await sleep(1500);
-    file = (await fileManager.getFile(file.name)) as GeminiUploadedFile;
+    attempts++;
+    file = (await getClients().fileManager.getFile(file.name)) as GeminiUploadedFile;
   }
 
   if (file.state === "FAILED") {
@@ -81,6 +90,7 @@ async function uploadVideoToGemini(
   await writeFile(tempPath, Buffer.from(bytes));
 
   try {
+    const { fileManager } = getClients();
     const uploadResult = await fileManager.uploadFile(tempPath, {
       mimeType,
       displayName,
@@ -108,6 +118,7 @@ async function uploadUrlToGemini(videoUrl: string): Promise<GeminiVideoFile> {
 }
 
 export async function detectSport(videoFile: GeminiVideoFile): Promise<Sport> {
+  const { genAI } = getClients();
   const model = genAI.getGenerativeModel({ model: getModelName() });
 
   const prompt = `Watch this sports video clip and identify which sport is being played.
@@ -140,6 +151,7 @@ export async function analyzeCall(
 ): Promise<AnalysisVerdict> {
   const { systemPrompt } = await PROMPT_LOADERS[sport]();
 
+  const { genAI } = getClients();
   const model = genAI.getGenerativeModel({
     model: getModelName(),
     systemInstruction: systemPrompt,
@@ -150,6 +162,7 @@ export async function analyzeCall(
 Use the JSON verdict values this app expects:
 - "FAIR" means the play/call/no-call is legal or correct.
 - "BAD" means the play is illegal, a violation/foul occurred, or the call/no-call was wrong.
+- "INCONCLUSIVE" means the video quality, camera angle, or available footage does not provide enough information to make a confident determination.
 
 Return ONLY a valid JSON object matching the required schema. No markdown, no preamble.`;
 
@@ -164,7 +177,8 @@ Return ONLY a valid JSON object matching the required schema. No markdown, no pr
   ]);
 
   const raw = result.response.text().trim();
-  const cleaned = raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  const cleaned = jsonMatch ? jsonMatch[0] : raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
 
   let parsed: unknown;
   try {
