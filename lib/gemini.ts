@@ -10,9 +10,7 @@ import type { AnalysisVerdict, Sport } from "@/types";
 function getClients() {
   const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   if (!apiKey) {
-    throw new Error(
-      "GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env file."
-    );
+    throw new Error("GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env file.");
   }
   return {
     genAI: new GoogleGenerativeAI(apiKey),
@@ -95,7 +93,6 @@ async function uploadVideoToGemini(
       mimeType,
       displayName,
     });
-
     return await waitForGeminiFile(uploadResult.file as GeminiUploadedFile);
   } finally {
     await unlink(tempPath).catch(() => undefined);
@@ -108,11 +105,9 @@ async function uploadBrowserFileToGemini(file: File): Promise<GeminiVideoFile> {
 
 async function uploadUrlToGemini(videoUrl: string): Promise<GeminiVideoFile> {
   const response = await fetch(videoUrl);
-
   if (!response.ok) {
     throw new Error(`Could not fetch video URL for Gemini upload: ${response.status}`);
   }
-
   const mimeType = response.headers.get("content-type") ?? "video/mp4";
   return uploadVideoToGemini(await response.arrayBuffer(), mimeType, "uploaded-video");
 }
@@ -127,12 +122,7 @@ Do not include any other text.`;
 
   const result = await model.generateContent([
     { text: prompt },
-    {
-      fileData: {
-        mimeType: videoFile.mimeType,
-        fileUri: videoFile.uri,
-      },
-    },
+    { fileData: { mimeType: videoFile.mimeType, fileUri: videoFile.uri } },
   ]);
 
   const raw = result.response.text().trim().toLowerCase();
@@ -147,38 +137,41 @@ Do not include any other text.`;
 
 export async function analyzeCall(
   videoFile: GeminiVideoFile,
-  sport: Sport
+  sport: Sport,
+  originalCall?: string
 ): Promise<AnalysisVerdict> {
   const { systemPrompt } = await PROMPT_LOADERS[sport]();
-
   const { genAI } = getClients();
   const model = genAI.getGenerativeModel({
     model: getModelName(),
     systemInstruction: systemPrompt,
   });
 
-  const userPrompt = `Analyze this ${sport} video clip and decide whether the play should be considered legal or illegal under the rules provided in the system prompt.
+  const callContext = originalCall
+    ? `The original referee call was: "${originalCall}". Evaluate whether this call was correct.`
+    : "No original call was provided. Evaluate whether any call made (or not made) appears correct.";
 
-Use the JSON verdict values this app expects:
-- "FAIR" means the play/call/no-call is legal or correct.
-- "BAD" means the play is illegal, a violation/foul occurred, or the call/no-call was wrong.
-- "INCONCLUSIVE" means any of the following: the video quality, camera angle, or available footage does not provide enough information to make a confident determination; OR the play involves a genuine judgment call where the evidence is mixed and reasonable officials could disagree; OR the relevant action is only partially visible and the rule's application depends on details that cannot be confirmed from this footage. Do NOT force a FAIR or BAD verdict when the evidence genuinely doesn't support one.
+  const userPrompt = `Analyze this ${sport} video clip and determine if the officiating decision was correct.
+
+${callContext}
+
+Return your verdict as one of exactly three options:
+- "FAIR" — the call was correct based on the rules
+- "BAD" — the call was incorrect based on the rules
+- "INCONCLUSIVE" — the video angle, quality, or available information is insufficient to make a confident judgment
 
 Return ONLY a valid JSON object matching the required schema. No markdown, no preamble.`;
 
   const result = await model.generateContent([
     { text: userPrompt },
-    {
-      fileData: {
-        mimeType: videoFile.mimeType,
-        fileUri: videoFile.uri,
-      },
-    },
+    { fileData: { mimeType: videoFile.mimeType, fileUri: videoFile.uri } },
   ]);
 
   const raw = result.response.text().trim();
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  const cleaned = jsonMatch ? jsonMatch[0] : raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+  const cleaned = jsonMatch
+    ? jsonMatch[0]
+    : raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
 
   let parsed: unknown;
   try {
@@ -197,22 +190,22 @@ Return ONLY a valid JSON object matching the required schema. No markdown, no pr
   return validated.data;
 }
 
-export async function runAnalysisPipelineForFile(file: File): Promise<{
-  sport: Sport;
-  verdict: AnalysisVerdict;
-}> {
+export async function runAnalysisPipelineForFile(
+  file: File,
+  originalCall?: string
+): Promise<{ sport: Sport; verdict: AnalysisVerdict }> {
   const videoFile = await uploadBrowserFileToGemini(file);
   const sport = await detectSport(videoFile);
-  const verdict = await analyzeCall(videoFile, sport);
+  const verdict = await analyzeCall(videoFile, sport, originalCall);
   return { sport, verdict };
 }
 
-export async function runAnalysisPipeline(videoUrl: string): Promise<{
-  sport: Sport;
-  verdict: AnalysisVerdict;
-}> {
+export async function runAnalysisPipeline(
+  videoUrl: string,
+  originalCall?: string
+): Promise<{ sport: Sport; verdict: AnalysisVerdict }> {
   const videoFile = await uploadUrlToGemini(videoUrl);
   const sport = await detectSport(videoFile);
-  const verdict = await analyzeCall(videoFile, sport);
+  const verdict = await analyzeCall(videoFile, sport, originalCall);
   return { sport, verdict };
 }

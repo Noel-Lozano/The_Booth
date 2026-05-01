@@ -10,6 +10,7 @@ const CONFIDENCE_THRESHOLD = 80;
 
 const RequestSchema = z.object({
   blobUrl: z.string().url(),
+  originalCall: z.string().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -17,11 +18,16 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get("content-type") ?? "";
 
     let blobUrl = "";
+    let originalCall: string | undefined;
     let analysisInput: { type: "file"; file: File } | { type: "url"; url: string };
 
     if (contentType.includes("multipart/form-data")) {
       const formData = await req.formData();
       const file = formData.get("video") as File | null;
+      const rawCall = formData.get("originalCall");
+      if (typeof rawCall === "string" && rawCall.trim()) {
+        originalCall = rawCall.trim();
+      }
 
       if (!file) {
         return NextResponse.json<ApiError>(
@@ -39,10 +45,7 @@ export async function POST(req: NextRequest) {
 
       if (!ACCEPTED_TYPES.includes(file.type)) {
         return NextResponse.json<ApiError>(
-          {
-            error: "Unsupported format. Use MP4, MOV, or WebM",
-            code: "INVALID_FORMAT",
-          },
+          { error: "Unsupported format. Use MP4, MOV, or WebM", code: "INVALID_FORMAT" },
           { status: 400 }
         );
       }
@@ -55,7 +58,6 @@ export async function POST(req: NextRequest) {
           addRandomSuffix: true,
           cacheControlMaxAge: 60 * 60 * 24,
         });
-
         blobUrl = blob.url;
       }
     } else {
@@ -70,13 +72,14 @@ export async function POST(req: NextRequest) {
       }
 
       blobUrl = parsed.data.blobUrl;
+      originalCall = parsed.data.originalCall;
       analysisInput = { type: "url", url: blobUrl };
     }
 
     const { sport, verdict: rawVerdict } =
       analysisInput.type === "file"
-        ? await runAnalysisPipelineForFile(analysisInput.file)
-        : await runAnalysisPipeline(analysisInput.url);
+        ? await runAnalysisPipelineForFile(analysisInput.file, originalCall)
+        : await runAnalysisPipeline(analysisInput.url, originalCall);
 
     let verdict = rawVerdict;
     if (verdict.confidence < CONFIDENCE_THRESHOLD && verdict.verdict !== "INCONCLUSIVE") {
@@ -93,6 +96,7 @@ export async function POST(req: NextRequest) {
       verdict,
       blobUrl,
       createdAt: new Date().toISOString(),
+      ...(originalCall ? { originalCall } : {}),
     });
   } catch (err) {
     console.error("[/api/analyze] Error:", err);
@@ -115,7 +119,7 @@ export async function POST(req: NextRequest) {
 
     if (message.includes("invalid JSON") || message.includes("schema")) {
       return NextResponse.json<ApiError>(
-        { error: "Analysis failed - invalid model response", code: "INVALID_MODEL_OUTPUT" },
+        { error: "Analysis failed — invalid model response", code: "INVALID_MODEL_OUTPUT" },
         { status: 502 }
       );
     }

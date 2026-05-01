@@ -13,6 +13,8 @@ export interface AnalysisResult {
   verdict: AnalysisVerdict;
   blobUrl: string;
   createdAt: string;
+  originalCall?: string;
+  previewUrl?: string;
 }
 
 export interface ApiError {

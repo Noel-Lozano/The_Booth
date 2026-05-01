@@ -6,7 +6,7 @@ import { upload } from "@vercel/blob/client";
 import { useAnalysisStore } from "@/store/useAnalysisStore";
 import type { AnalysisResult } from "@/types";
 
-const MAX_SIZE = 500 * 1024 * 1024;
+const MAX_SIZE = 500 * 1024 * 1024; // 500MB — client-side upload bypasses serverless limit
 const ACCEPTED = {
   "video/mp4": [".mp4"],
   "video/quicktime": [".mov"],
@@ -21,6 +21,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
   const { uploadStatus, uploadError, setUploadStatus, setUploadError, setDetectedSport, reset } =
     useAnalysisStore();
   const [preview, setPreview] = useState<string | null>(null);
+  const [originalCall, setOriginalCall] = useState("");
 
   const onDrop = useCallback(
     async (accepted: File[], rejected: import("react-dropzone").FileRejection[]) => {
@@ -39,41 +40,59 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       if (accepted.length === 0) return;
 
       const file = accepted[0];
-      setPreview((currentPreview) => {
-        if (currentPreview) URL.revokeObjectURL(currentPreview);
-        return URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
+      setPreview((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return objectUrl;
       });
       setUploadError(null);
       setUploadStatus("uploading");
 
       try {
+        // Upload directly from browser to Vercel Blob — bypasses serverless body limit
         const blob = await upload(file.name, file, {
           access: "public",
           handleUploadUrl: "/api/upload-token",
         });
 
         setUploadStatus("analyzing");
+
         const res = await fetch("/api/analyze", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ blobUrl: blob.url }),
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            ...(originalCall.trim() ? { originalCall: originalCall.trim() } : {}),
+          }),
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? "Upload failed");
+          const errorMessages: Record<string, string> = {
+            SPORT_DETECTION_FAILED: "Sport could not be detected — try a clearer clip.",
+            INVALID_MODEL_OUTPUT: "Analysis failed — the model returned an unexpected response. Try again.",
+            FILE_TOO_LARGE: "File too large — try a shorter or compressed clip.",
+            INVALID_FORMAT: "Unsupported format. Use MP4, MOV, or WebM.",
+            MISSING_FILE: "No video file found — try again.",
+            SERVER_ERROR: "Something went wrong on our end — try again.",
+          };
+          if (res.status === 413) {
+            throw new Error("File too large for the server — try a shorter or compressed clip.");
+          }
+          let err: { code?: string; error?: string } = {};
+          try { err = await res.json(); } catch { /* non-JSON error response */ }
+          throw new Error(errorMessages[err.code ?? ""] ?? err.error ?? "Upload failed.");
         }
 
         const result: AnalysisResult = await res.json();
         setDetectedSport(result.sport);
         setUploadStatus("done");
-        onResult(result);
+        onResult({ ...result, previewUrl: objectUrl });
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "Something went wrong.");
         setUploadStatus("error");
       }
     },
-    [setUploadStatus, setUploadError, setDetectedSport, onResult]
+    [originalCall, setUploadStatus, setUploadError, setDetectedSport, onResult]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -110,27 +129,43 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
 
         {isLoading ? (
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-            <p className="text-white/70 text-sm">
-              {uploadStatus === "uploading"
-                ? "Uploading video..."
-                : "Uploading to Gemini and checking the play..."}
+            <div className={`w-10 h-10 border-2 border-t-transparent rounded-full animate-spin ${
+              uploadStatus === "uploading" ? "border-white/40" : "border-yellow-400"
+            }`} />
+            <p className="text-white font-medium text-sm">
+              {uploadStatus === "uploading" ? "Uploading video..." : "Analyzing with Gemini..."}
+            </p>
+            <p className="text-white/40 text-xs">
+              {uploadStatus === "uploading" ? "Sending to Vercel Blob" : "This takes around 30 seconds"}
             </p>
           </div>
         ) : (
           <>
-            <div className="text-5xl mb-4" aria-hidden="true">
-              VIDEO
-            </div>
+            <div className="text-5xl mb-4" aria-hidden="true">🎬</div>
             <p className="text-white font-medium text-lg mb-1">
               {isDragActive ? "Drop it here" : "Drop your clip here"}
             </p>
-            <p className="text-white/50 text-sm">MP4, MOV, or WebM - Max 500MB</p>
+            <p className="text-white/50 text-sm">MP4, MOV, or WebM · Max 500MB</p>
           </>
         )}
       </div>
 
-      {uploadError && <p className="mt-3 text-red-400 text-sm text-center">{uploadError}</p>}
+      {/* Original call input */}
+      {!isLoading && (
+        <div className="mt-4">
+          <input
+            type="text"
+            value={originalCall}
+            onChange={(e) => setOriginalCall(e.target.value)}
+            placeholder="Original referee call (optional) — e.g. Blocking foul"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-colors"
+          />
+        </div>
+      )}
+
+      {uploadError && (
+        <p className="mt-3 text-red-400 text-sm text-center">{uploadError}</p>
+      )}
 
       {uploadStatus === "error" && (
         <button
