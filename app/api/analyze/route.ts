@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { put } from "@vercel/blob";
-import { runAnalysisPipeline } from "@/lib/gemini";
+import { runAnalysisPipeline, runAnalysisPipelineForFile } from "@/lib/gemini";
 import type { ApiError } from "@/types";
 
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const ACCEPTED_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
 
 const RequestSchema = z.object({
@@ -13,13 +13,12 @@ const RequestSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    // Check Content-Type to handle both JSON (blob URL) and FormData (direct upload)
     const contentType = req.headers.get("content-type") ?? "";
 
-    let blobUrl: string;
+    let blobUrl = "";
+    let analysisInput: { type: "file"; file: File } | { type: "url"; url: string };
 
     if (contentType.includes("multipart/form-data")) {
-      // Handle direct file upload
       const formData = await req.formData();
       const file = formData.get("video") as File | null;
 
@@ -47,16 +46,18 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const blob = await put(file.name, file, {
-        access: "public",
-        addRandomSuffix: true,
-        // TTL: 24 hours
-        cacheControlMaxAge: 60 * 60 * 24,
-      });
+      analysisInput = { type: "file", file };
 
-      blobUrl = blob.url;
+      if (process.env.BLOB_READ_WRITE_TOKEN) {
+        const blob = await put(file.name, file, {
+          access: "public",
+          addRandomSuffix: true,
+          cacheControlMaxAge: 60 * 60 * 24,
+        });
+
+        blobUrl = blob.url;
+      }
     } else {
-      // Handle pre-uploaded blob URL
       const body = await req.json();
       const parsed = RequestSchema.safeParse(body);
 
@@ -68,15 +69,16 @@ export async function POST(req: NextRequest) {
       }
 
       blobUrl = parsed.data.blobUrl;
+      analysisInput = { type: "url", url: blobUrl };
     }
 
-    // Run two-pass Gemini pipeline
-    const { sport, verdict } = await runAnalysisPipeline(blobUrl);
-
-    const id = crypto.randomUUID();
+    const { sport, verdict } =
+      analysisInput.type === "file"
+        ? await runAnalysisPipelineForFile(analysisInput.file)
+        : await runAnalysisPipeline(analysisInput.url);
 
     return NextResponse.json({
-      id,
+      id: crypto.randomUUID(),
       sport,
       verdict,
       blobUrl,
@@ -87,6 +89,13 @@ export async function POST(req: NextRequest) {
 
     const message = err instanceof Error ? err.message : "Unknown error";
 
+    if (message.includes("GOOGLE_GENERATIVE_AI_API_KEY")) {
+      return NextResponse.json<ApiError>(
+        { error: message, code: "MISSING_GEMINI_KEY" },
+        { status: 500 }
+      );
+    }
+
     if (message.includes("Could not detect sport")) {
       return NextResponse.json<ApiError>(
         { error: message, code: "SPORT_DETECTION_FAILED" },
@@ -96,7 +105,14 @@ export async function POST(req: NextRequest) {
 
     if (message.includes("invalid JSON") || message.includes("schema")) {
       return NextResponse.json<ApiError>(
-        { error: "Analysis failed — invalid model response", code: "INVALID_MODEL_OUTPUT" },
+        { error: "Analysis failed - invalid model response", code: "INVALID_MODEL_OUTPUT" },
+        { status: 502 }
+      );
+    }
+
+    if (message.includes("Gemini")) {
+      return NextResponse.json<ApiError>(
+        { error: message, code: "GEMINI_ERROR" },
         { status: 502 }
       );
     }

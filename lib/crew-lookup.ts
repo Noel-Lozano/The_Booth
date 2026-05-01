@@ -1,6 +1,3 @@
-// Officiating crew lookup
-// Resolves referee/umpire crew from game metadata using Sportradar API
-
 export interface CrewMember {
   id: string;
   name: string;
@@ -13,22 +10,21 @@ export interface CrewInfo {
   crew: CrewMember[];
 }
 
-export async function lookupCrew(
-  sport: string,
-  gameId?: string
-): Promise<CrewInfo | null> {
+export async function lookupCrew(sport: string, gameId?: string): Promise<CrewInfo | null> {
   const apiKey = process.env.SPORTRADAR_API_KEY;
 
   if (!apiKey) {
-    console.error("[crew-lookup] SPORTRADAR_API_KEY is not set — skipping crew lookup");
+    console.error(
+      `[crew-lookup] SPORTRADAR_API_KEY is not set - skipping ${sport} crew lookup for ${
+        gameId ?? "unknown game"
+      }`
+    );
     return null;
   }
 
-  // Sportradar endpoints vary by sport — extend per sport as needed
-  // This is a stub implementation for the hackathon
-  // Full implementation would query: https://api.sportradar.com/{sport}/trial/v8/en/games/{gameId}/boxscore.json
   try {
-    // TODO: implement per-sport Sportradar API calls
+    // Sportradar endpoints vary by sport. Keep this as a documented fallback for the demo.
+    console.info(`[crew-lookup] Crew lookup not implemented yet for ${sport}/${gameId ?? "unknown"}`);
     return null;
   } catch (err) {
     console.error("[crew-lookup] Failed to fetch crew:", err);

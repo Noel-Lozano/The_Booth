@@ -5,7 +5,7 @@ import { useDropzone } from "react-dropzone";
 import { useAnalysisStore } from "@/store/useAnalysisStore";
 import type { AnalysisResult } from "@/types";
 
-const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_SIZE = 50 * 1024 * 1024;
 const ACCEPTED = {
   "video/mp4": [".mp4"],
   "video/quicktime": [".mov"],
@@ -38,7 +38,10 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       if (accepted.length === 0) return;
 
       const file = accepted[0];
-      setPreview(URL.createObjectURL(file));
+      setPreview((currentPreview) => {
+        if (currentPreview) URL.revokeObjectURL(currentPreview);
+        return URL.createObjectURL(file);
+      });
       setUploadError(null);
       setUploadStatus("uploading");
 
@@ -46,6 +49,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
         const formData = new FormData();
         formData.append("video", file);
 
+        setUploadStatus("analyzing");
         const res = await fetch("/api/analyze", {
           method: "POST",
           body: formData,
@@ -56,7 +60,6 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
           throw new Error(err.error ?? "Upload failed");
         }
 
-        setUploadStatus("analyzing");
         const result: AnalysisResult = await res.json();
         setDetectedSport(result.sport);
         setUploadStatus("done");
@@ -97,6 +100,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
             className="mx-auto mb-6 max-h-48 rounded-xl object-cover"
             muted
             playsInline
+            controls
           />
         )}
 
@@ -104,25 +108,25 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
           <div className="flex flex-col items-center gap-3">
             <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
             <p className="text-white/70 text-sm">
-              {uploadStatus === "uploading" ? "Uploading video..." : "Analyzing with AI..."}
+              {uploadStatus === "uploading"
+                ? "Uploading video..."
+                : "Uploading to Gemini and checking the play..."}
             </p>
           </div>
         ) : (
           <>
-            <div className="text-5xl mb-4">🎬</div>
+            <div className="text-5xl mb-4" aria-hidden="true">
+              VIDEO
+            </div>
             <p className="text-white font-medium text-lg mb-1">
               {isDragActive ? "Drop it here" : "Drop your clip here"}
             </p>
-            <p className="text-white/50 text-sm">
-              MP4, MOV, or WebM · Max 50MB
-            </p>
+            <p className="text-white/50 text-sm">MP4, MOV, or WebM - Max 50MB</p>
           </>
         )}
       </div>
 
-      {uploadError && (
-        <p className="mt-3 text-red-400 text-sm text-center">{uploadError}</p>
-      )}
+      {uploadError && <p className="mt-3 text-red-400 text-sm text-center">{uploadError}</p>}
 
       {uploadStatus === "error" && (
         <button
