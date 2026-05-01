@@ -13,6 +13,7 @@ out/
 .env.development.local
 .env.test.local
 .env.production.local
+.env.example
 
 # vercel
 .vercel
@@ -28,5 +29,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-/docs
+docs/
 CLAUDE.md
