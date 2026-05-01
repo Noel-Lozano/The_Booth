@@ -8,14 +8,24 @@ import { z } from "zod";
 import type { AnalysisVerdict, Sport } from "@/types";
 
 const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-if (!apiKey) {
-  throw new Error(
-    "GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env.local file."
-  );
+
+function getApiKey() {
+  if (!apiKey) {
+    throw new Error(
+      "GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env.local file."
+    );
+  }
+
+  return apiKey;
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
-const fileManager = new GoogleAIFileManager(apiKey);
+function getGenAI() {
+  return new GoogleGenerativeAI(getApiKey());
+}
+
+function getFileManager() {
+  return new GoogleAIFileManager(getApiKey());
+}
 
 interface GeminiVideoFile {
   uri: string;
@@ -57,7 +67,7 @@ async function waitForGeminiFile(uploadedFile: GeminiUploadedFile): Promise<Gemi
 
   while (file.state === "PROCESSING") {
     await sleep(1500);
-    file = (await fileManager.getFile(file.name)) as GeminiUploadedFile;
+    file = (await getFileManager().getFile(file.name)) as GeminiUploadedFile;
   }
 
   if (file.state === "FAILED") {
@@ -81,7 +91,7 @@ async function uploadVideoToGemini(
   await writeFile(tempPath, Buffer.from(bytes));
 
   try {
-    const uploadResult = await fileManager.uploadFile(tempPath, {
+    const uploadResult = await getFileManager().uploadFile(tempPath, {
       mimeType,
       displayName,
     });
@@ -108,7 +118,7 @@ async function uploadUrlToGemini(videoUrl: string): Promise<GeminiVideoFile> {
 }
 
 export async function detectSport(videoFile: GeminiVideoFile): Promise<Sport> {
-  const model = genAI.getGenerativeModel({ model: getModelName() });
+  const model = getGenAI().getGenerativeModel({ model: getModelName() });
 
   const prompt = `Watch this sports video clip and identify which sport is being played.
 Respond with ONLY one of these exact words (lowercase): basketball, soccer, baseball, football, hockey
@@ -140,7 +150,7 @@ export async function analyzeCall(
 ): Promise<AnalysisVerdict> {
   const { systemPrompt } = await PROMPT_LOADERS[sport]();
 
-  const model = genAI.getGenerativeModel({
+  const model = getGenAI().getGenerativeModel({
     model: getModelName(),
     systemInstruction: systemPrompt,
   });
