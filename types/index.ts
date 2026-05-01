@@ -14,6 +14,7 @@ export interface AnalysisResult {
   blobUrl: string;
   createdAt: string;
   originalCall?: string;
+  previewUrl?: string;
 }
 
 export interface ApiError {

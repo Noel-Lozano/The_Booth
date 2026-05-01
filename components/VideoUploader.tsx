@@ -40,14 +40,44 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       if (accepted.length === 0) return;
 
       const file = accepted[0];
+      const objectUrl = URL.createObjectURL(file);
       setPreview((current) => {
         if (current) URL.revokeObjectURL(current);
-        return URL.createObjectURL(file);
+        return objectUrl;
       });
       setUploadError(null);
       setUploadStatus("uploading");
 
       try {
+        // MOCK MODE — set NEXT_PUBLIC_MOCK=true in .env.local to use this locally
+        if (process.env.NEXT_PUBLIC_MOCK === "true") {
+          await new Promise((r) => setTimeout(r, 1500));
+          setUploadStatus("analyzing");
+          await new Promise((r) => setTimeout(r, 2000));
+          const mockResult: AnalysisResult = {
+            id: "mock-001",
+            sport: "basketball",
+            verdict: {
+              verdict: "INCONCLUSIVE",
+              confidence: 87,
+              reasoning:
+                "The defender was still moving laterally at the moment of contact and had not established a legal guarding position. Under NBA Rule 12, Section II(a), a defensive player must have both feet on the floor and be stationary to draw a charge. The contact initiated by the offensive player appears to be a blocking foul, not a charge.",
+              rule_citations: [
+                "NBA Rule 12, Section II(a) — Legal Guarding Position",
+                "NBA Rule 12, Section II(b) — Blocking Foul vs. Charging",
+              ],
+            },
+            blobUrl: "",
+            createdAt: new Date().toISOString(),
+            ...(originalCall.trim() ? { originalCall: originalCall.trim() } : {}),
+            previewUrl: objectUrl,
+          };
+          setDetectedSport("basketball");
+          setUploadStatus("done");
+          onResult(mockResult);
+          return;
+        }
+
         // Upload directly from browser to Vercel Blob — bypasses serverless body limit
         const blob = await upload(file.name, file, {
           access: "public",
@@ -85,7 +115,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
         const result: AnalysisResult = await res.json();
         setDetectedSport(result.sport);
         setUploadStatus("done");
-        onResult(result);
+        onResult({ ...result, previewUrl: objectUrl });
       } catch (err) {
         setUploadError(err instanceof Error ? err.message : "Something went wrong.");
         setUploadStatus("error");
