@@ -23,8 +23,11 @@ Your task is to analyze the provided video clip and determine whether the offici
 - Teams that are shorthanded (penalty killing) may ice the puck without penalty.
 
 **Goaltender Interference (Rule 69):**
-- No attacking player may enter the goal crease and interfere with the goaltender's ability to defend their goal. A goal is disallowed if an attacking player is in the crease and interferes with the goalie.
+- No attacking player may enter the goal crease and interfere with the goaltender's ability to defend their goal. A goal is disallowed if an attacking player is in the crease and contacts or physically impedes the goaltender.
 - Incidental contact with the goaltender while the goaltender is in the crease does not automatically waive off a goal — intent and impact are considered.
+- Mere presence in the crease is NOT sufficient to disallow a goal. There must be actual interference with the goaltender — physical contact that impedes their ability to make a save, or deliberate obstruction of their movement or sightline in a way that directly affects the play.
+- CRITICAL AMBIGUITY — Possession exception: A player with possession and control of the puck is permitted to enter the crease. If an attacking player has the puck on their stick and carries or redirects it into the crease, their presence is legal regardless of crease position. The pivotal question — did the player have control before or simultaneous with crease entry — is extremely difficult to determine from broadcast angles, requires frame-by-frame analysis from overhead cameras, and is something the NHL itself has called inconsistently across eras. When a player scores from the crease and there is any plausible argument that they had puck control on entry, you must return INCONCLUSIVE. Do not return BAD simply because a skate is in the crease paint.
+- CRITICAL AMBIGUITY — Era and rule version: The crease rule was enforced with maximum strictness in 1998-99 (any skate in the blue paint = review), relaxed via internal memo mid-season, then abolished entirely before 2000-01. Goals scored in the late 1990s must be evaluated under the rule as it existed and was interpreted at that specific time — which was itself disputed and inconsistently applied. This makes crease-related goals from that era inherently INCONCLUSIVE when the footage does not clearly resolve possession timing.
 
 **High-Sticking (Rule 60):**
 - A minor penalty is assessed when a player carries their stick above the normal height of the shoulder and makes contact with an opponent.
@@ -32,18 +35,26 @@ Your task is to analyze the provided video clip and determine whether the offici
 
 ## Instructions
 
+Before assessing a crease goal situation, ask: (1) Was there actual physical contact with the goaltender, or just proximity? (2) Did the player have the puck on their stick when entering the crease? (3) What era is this clip from — is the strict 1998-99 crease rule, the memo exception, or the post-2000 standard relevant? If any of these questions cannot be confidently answered from the available footage, return INCONCLUSIVE.
+
 Analyze the video carefully. Then respond ONLY with a valid JSON object — no preamble, no explanation outside the JSON, no markdown code fences.
 
 The JSON must match this exact schema:
 {
   "verdict": "FAIR" | "BAD" | "INCONCLUSIVE",
   "confidence": <number 0-100>,
-  "rule_citations": [<array of specific rule strings, e.g. "NHL Rule 56 — Interference">],
+  "rule_citations": [<array of specific rule strings, e.g. "NHL Rule 69 — Goaltender Interference"]>,
   "reasoning": "<plain English explanation of what happened and why the call was correct or incorrect>"
 }
 
 Rules for your analysis:
 - Only cite rules present in the context above.
-- Reflect video angle or speed limitations with lower confidence scores.
-- "FAIR" = the call was correct. "BAD" = the call was wrong, or a missed call occurred. "INCONCLUSIVE" = the video quality, angle, or available footage is insufficient to make a confident determination.
+- "FAIR" = the call was correct. "BAD" = the call was wrong, or a missed call occurred. "INCONCLUSIVE" = use this verdict in ANY of the following situations:
+  1. Video quality, camera angle, speed of play, or available footage is insufficient to make a confident determination.
+  2. A crease goal where possession timing on entry cannot be clearly established from the broadcast angle.
+  3. A crease goal from the late 1990s where the applicable rule version is itself disputed.
+  4. A goaltender interference situation where "incidental contact" vs. "interference" is genuinely ambiguous.
+  5. An offside call that depends on a skate position not clearly visible in the footage.
+  6. A penalty call where the distinction between minor and major is a legitimate judgment call.
+  Use a confidence score below 60 to signal borderline cases even when you do return FAIR or BAD.
 `;

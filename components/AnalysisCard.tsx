@@ -15,27 +15,32 @@ const SPORT_LABEL: Record<string, string> = {
 
 export function AnalysisCard({ result }: AnalysisCardProps) {
   const { verdict, sport } = result;
-  const isLegal = verdict.verdict === "FAIR";
+  const v = verdict.verdict;
+
+  const headerClass =
+    v === "FAIR"
+      ? "bg-green-500/20 border-b border-green-500/30"
+      : v === "BAD"
+        ? "bg-red-500/20 border-b border-red-500/30"
+        : "bg-yellow-500/20 border-b border-yellow-500/30";
+
+  const textClass =
+    v === "FAIR" ? "text-green-400" : v === "BAD" ? "text-red-400" : "text-yellow-400";
+
+  const label =
+    v === "FAIR" ? "Correct Call" : v === "BAD" ? "Incorrect Call" : "Inconclusive Call";
 
   return (
     <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-sm">
       <div
-        className={`px-8 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between ${
-          isLegal
-            ? "bg-green-500/20 border-b border-green-500/30"
-            : "bg-red-500/20 border-b border-red-500/30"
-        }`}
+        className={`px-8 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between ${headerClass}`}
       >
         <div>
           <p className="text-white/50 text-xs uppercase tracking-widest mb-1">
             {SPORT_LABEL[sport] ?? sport}
           </p>
-          <h2
-            className={`text-3xl sm:text-4xl font-black tracking-tight ${
-              isLegal ? "text-green-400" : "text-red-400"
-            }`}
-          >
-            {isLegal ? "LEGAL PLAY" : "ILLEGAL PLAY"}
+          <h2 className={`text-3xl sm:text-4xl font-black tracking-tight ${textClass}`}>
+            {label}
           </h2>
         </div>
 
