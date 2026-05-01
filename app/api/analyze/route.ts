@@ -73,11 +73,12 @@ export async function POST(req: NextRequest) {
       analysisInput = { type: "url", url: blobUrl };
     }
 
-    let { sport, verdict } =
+    const { sport, verdict: rawVerdict } =
       analysisInput.type === "file"
         ? await runAnalysisPipelineForFile(analysisInput.file)
         : await runAnalysisPipeline(analysisInput.url);
 
+    let verdict = rawVerdict;
     if (verdict.confidence < CONFIDENCE_THRESHOLD && verdict.verdict !== "INCONCLUSIVE") {
       verdict = {
         ...verdict,
