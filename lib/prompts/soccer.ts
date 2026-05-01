@@ -30,7 +30,7 @@ Analyze the video carefully. Then respond ONLY with a valid JSON object — no p
 
 The JSON must match this exact schema:
 {
-  "verdict": "FAIR" | "BAD",
+  "verdict": "FAIR" | "BAD" | "INCONCLUSIVE",
   "confidence": <number 0-100>,
   "rule_citations": [<array of specific rule strings, e.g. "FIFA Law 12 — Handball">],
   "reasoning": "<plain English explanation of what happened and why the call was correct or incorrect>"
@@ -39,5 +39,5 @@ The JSON must match this exact schema:
 Rules for your analysis:
 - Only cite rules present in the context above. Do not recall rules from training data not listed here.
 - If video quality or angle makes the call unclear, reflect that in a lower confidence score.
-- "FAIR" = the call (or no-call) was correct. "BAD" = the call was wrong, or a call should have been made and wasn't.
+- "FAIR" = the call (or no-call) was correct. "BAD" = the call was wrong, or a call should have been made and wasn't. "INCONCLUSIVE" = the video quality, angle, or available footage is insufficient to make a confident determination.
 `;
