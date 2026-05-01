@@ -30,11 +30,24 @@ interface GeminiUploadedFile {
   state?: string;
 }
 
+const EvidenceReviewSchema = z.object({
+  incident_start_seconds: z.number().min(0),
+  incident_end_seconds: z.number().min(0),
+  suspicious_timestamps: z.array(
+    z.object({
+      time_seconds: z.number().min(0),
+      explanation: z.string(),
+      confidence: z.number().min(0).max(100),
+    })
+  ),
+});
+
 export const VerdictSchema = z.object({
   verdict: z.enum(["FAIR", "BAD", "INCONCLUSIVE"]),
   confidence: z.number().min(0).max(100),
   rule_citations: z.array(z.string()),
   reasoning: z.string(),
+  evidence_review: EvidenceReviewSchema.optional(),
 });
 
 const SPORTS: Sport[] = ["basketball", "soccer", "baseball", "football", "hockey"];
@@ -51,6 +64,17 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function getModelName() {
   return process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+}
+
+function evidenceLooksPinnedToStart(evidence: AnalysisVerdict["evidence_review"]) {
+  if (!evidence) return false;
+
+  const latestTimestamp = Math.max(
+    evidence.incident_end_seconds,
+    ...evidence.suspicious_timestamps.map((timestamp) => timestamp.time_seconds)
+  );
+
+  return evidence.incident_start_seconds <= 0.25 && latestTimestamp <= 2.5;
 }
 
 async function waitForGeminiFile(uploadedFile: GeminiUploadedFile): Promise<GeminiVideoFile> {
@@ -156,11 +180,47 @@ export async function analyzeCall(
 ${callContext}
 
 Return your verdict as one of exactly three options:
-- "FAIR" — the call was correct based on the rules
-- "BAD" — the call was incorrect based on the rules
-- "INCONCLUSIVE" — the video angle, quality, or available information is insufficient to make a confident judgment
+- "FAIR" - the call was correct based on the rules
+- "BAD" - the call was incorrect based on the rules
+- "INCONCLUSIVE" - the video angle, quality, or available information is insufficient to make a confident judgment
 
-Return ONLY a valid JSON object matching the required schema. No markdown, no preamble.`;
+You must also identify the exact video segment where the key action happens.
+
+Return ONLY a valid JSON object with this shape:
+{
+  "verdict": "FAIR" | "BAD" | "INCONCLUSIVE",
+  "confidence": <number from 0 to 100>,
+  "rule_citations": ["<specific rule reference>", "..."],
+  "reasoning": "<plain English explanation>",
+  "evidence_review": {
+    "incident_start_seconds": <number>,
+    "incident_end_seconds": <number>,
+    "suspicious_timestamps": [
+      {
+        "time_seconds": <number>,
+        "explanation": "<what visible evidence at this exact time supports the decision>",
+        "confidence": <number from 0 to 100>
+      }
+    ]
+  }
+}
+
+Evidence review rules:
+- Watch the full clip first, then choose the shortest useful incident window around the contact, violation, missed call, or unclear evidence.
+- Timestamps must be absolute seconds from the beginning of the uploaded clip, not relative to your selected incident window.
+- incident_start_seconds must be when the key action begins, not always 0.
+- incident_end_seconds must be when the key action is resolved.
+- Do not use 0.00 seconds unless the actual key action is visible in the first frame of the uploaded clip.
+- If the first frame shows the aftermath after the whistle, a player already on the floor, players standing around, or a replay after the contact, that is NOT the start of the incident. Search later or earlier in the clip for the actual contact/action frame.
+- If the clip contains a replay or angle change, choose the angle where the foul/action is most visible and use timestamps from that visible segment.
+- suspicious_timestamps must include only the necessary moments: usually 3 to 5 timestamps, never filler.
+- Each suspicious timestamp must be at least 0.35 seconds apart unless the entire incident is shorter than 1 second.
+- Each suspicious timestamp explanation must describe a different visible detail. Do not repeat the same explanation.
+- For BAD, timestamps must show the exact frames where the foul, violation, or wrong call becomes visible: before contact/position, moment of contact or violation, and aftermath if useful.
+- For FAIR, timestamps must show why the play remains legal: position before action, contact/no-contact moment, and continuation.
+- For INCONCLUSIVE, timestamps must show the specific frames where angle, blur, occlusion, or missing contact prevents a confident decision.
+- Do not guess wildly. If timing is approximate, choose the best visible moment and lower confidence.
+- Return JSON only. No markdown, no preamble.`;
 
   const result = await model.generateContent([
     { text: userPrompt },
@@ -187,7 +247,74 @@ Return ONLY a valid JSON object matching the required schema. No markdown, no pr
     throw new Error("Model response did not match expected schema");
   }
 
+  if (evidenceLooksPinnedToStart(validated.data.evidence_review)) {
+    const repairedEvidence = await relocalizeIncident(videoFile, sport, validated.data);
+
+    if (repairedEvidence && !evidenceLooksPinnedToStart(repairedEvidence)) {
+      return {
+        ...validated.data,
+        evidence_review: repairedEvidence,
+      };
+    }
+  }
+
   return validated.data;
+}
+
+async function relocalizeIncident(
+  videoFile: GeminiVideoFile,
+  sport: Sport,
+  verdict: AnalysisVerdict
+): Promise<AnalysisVerdict["evidence_review"] | null> {
+  const { genAI } = getClients();
+  const model = genAI.getGenerativeModel({ model: getModelName() });
+
+  const prompt = `The previous analysis appears to have placed the incident at 0:00, but that may be wrong.
+
+Re-watch the full ${sport} video and ONLY locate the key evidence window for this verdict:
+- Verdict: ${verdict.verdict}
+- Reasoning: ${verdict.reasoning}
+
+Return absolute timestamps in seconds from the beginning of the uploaded clip.
+
+Important:
+- Do not return 0.00 unless the actual foul/contact/violation is visible in the first frame.
+- If 0:00 shows aftermath, players already on the floor, replay aftermath, or dead-ball action, search the full clip for the actual live-action incident.
+- Prefer the camera angle where the suspected contact or rule issue is most visible.
+- Return 3 to 5 necessary timestamps only, with different explanations for each.
+
+Return strict JSON only:
+{
+  "incident_start_seconds": <number>,
+  "incident_end_seconds": <number>,
+  "suspicious_timestamps": [
+    {
+      "time_seconds": <number>,
+      "explanation": "<visible evidence at this exact time>",
+      "confidence": <number from 0 to 100>
+    }
+  ]
+}`;
+
+  const result = await model.generateContent([
+    { text: prompt },
+    { fileData: { mimeType: videoFile.mimeType, fileUri: videoFile.uri } },
+  ]);
+
+  const raw = result.response.text().trim();
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  const cleaned = jsonMatch
+    ? jsonMatch[0]
+    : raw.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+
+  try {
+    const parsed = JSON.parse(cleaned) as unknown;
+    const validated = EvidenceReviewSchema.safeParse(parsed);
+    return validated.success ? validated.data : null;
+  } catch {
+    console.error("[relocalizeIncident] Failed to parse Gemini response:", raw);
+    return null;
+  }
 }
 
 export async function runAnalysisPipelineForFile(

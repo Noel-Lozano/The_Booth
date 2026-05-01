@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 import { AnalysisCard } from "@/components/AnalysisCard";
+import { VideoEvidenceReview } from "@/components/VideoEvidenceReview";
 import { VideoUploader } from "@/components/VideoUploader";
 import { useAnalysisStore } from "@/store/useAnalysisStore";
 import type { AnalysisResult, AnalysisVerdict } from "@/types";
@@ -281,7 +282,7 @@ export default function Home() {
           ))}
         </div>
 
-        <div className="w-full max-w-3xl relative z-10">
+        <div className={`w-full relative z-10 ${result ? "max-w-5xl" : "max-w-3xl"}`}>
           {result ? (
             <div className="flex flex-col gap-6 animate-fade-in-up">
               {videoSrc && (
@@ -296,6 +297,8 @@ export default function Home() {
               )}
 
               <AnalysisCard result={result} />
+
+              {videoSrc && <VideoEvidenceReview result={result} videoSrc={videoSrc} />}
 
               <button
                 onClick={handleReset}
