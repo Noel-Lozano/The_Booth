@@ -2,7 +2,7 @@
 
 > GDG BorderHack Hackathon Project · May 2026
 
-Upload a short sports video clip → get an instant **FAIR CALL** or **BAD CALL** verdict with rule-based reasoning grounded in official rulebooks.
+Upload a short sports video clip → get an instant **FAIR CALL** or **BAD CALL** verdict with rule-based reasoning grounded in official rulebooks. **Inconclusive** may also be returned if the model cannot confidently determine whether the call is legal or illegal.
 
 **Supported sports:** Basketball · Soccer · Baseball · Football · Hockey
 
