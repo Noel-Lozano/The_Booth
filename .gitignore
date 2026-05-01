@@ -29,5 +29,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+<<<<<<< HEAD
 docs/
 CLAUDE.md
+=======
+/docs/
+>>>>>>> f3fe3cabd259dd9b04525199a5e71696e9c07b2e
