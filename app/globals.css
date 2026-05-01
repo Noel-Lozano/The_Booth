@@ -51,6 +51,56 @@
   100% { opacity: 0;    transform: translateX(100%); }
 }
 
+@keyframes celebrationOverlay {
+  0%   { opacity: 0; backdrop-filter: blur(0); }
+  12%  { opacity: 1; backdrop-filter: blur(10px); }
+  78%  { opacity: 1; backdrop-filter: blur(10px); }
+  100% { opacity: 0; backdrop-filter: blur(0); }
+}
+
+@keyframes celebrationPop {
+  0%   { opacity: 0; transform: translateY(28px) scale(0.72); }
+  14%  { opacity: 1; transform: translateY(0) scale(1.08); }
+  24%  { transform: translateY(0) scale(1); }
+  78%  { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-18px) scale(0.94); }
+}
+
+@keyframes cardSnap {
+  0%   { transform: translateY(80px) rotate(-20deg) scale(0.7); opacity: 0; }
+  18%  { transform: translateY(-12px) rotate(-8deg) scale(1.08); opacity: 1; }
+  30%  { transform: translateY(0) rotate(-10deg) scale(1); opacity: 1; }
+  82%  { transform: translateY(0) rotate(-10deg) scale(1); opacity: 1; }
+  100% { transform: translateY(-28px) rotate(-6deg) scale(0.94); opacity: 0; }
+}
+
+@keyframes fairBurst {
+  0%   { transform: scale(0.4) rotate(-18deg); opacity: 0; }
+  18%  { transform: scale(1.18) rotate(8deg); opacity: 1; }
+  32%  { transform: scale(1) rotate(0deg); opacity: 1; }
+  82%  { transform: scale(1) rotate(0deg); opacity: 1; }
+  100% { transform: scale(0.9) rotate(8deg); opacity: 0; }
+}
+
+@keyframes confettiFall {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--piece-x), -12vh, 0) rotate(var(--piece-rotate));
+  }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform:
+      translate3d(
+        calc(var(--piece-x) + (var(--piece-drift) * 9vw)),
+        108vh,
+        0
+      )
+      rotate(calc(var(--piece-rotate) + 560deg));
+  }
+}
+
 @layer utilities {
   .animate-fade-in-up  { animation: fadeInUp 0.55s cubic-bezier(0.16,1,0.3,1) forwards; }
   .animate-fade-in     { animation: fadeIn  0.4s ease-out forwards; }
@@ -66,4 +116,186 @@
 html, body {
   background: #000;
   color: #fff;
+}
+
+.vanta-page canvas {
+  inset: 0 !important;
+  z-index: 0 !important;
+}
+
+.result-celebration {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at center, var(--celebration-glow), transparent 58%),
+    rgba(0, 0, 0, 0.38);
+  animation: celebrationOverlay 4.1s ease-in-out forwards;
+}
+
+.result-celebration::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at center, transparent 0 34%, var(--celebration-glow) 56%, transparent 74%);
+  opacity: 0.85;
+}
+
+.celebration-fair {
+  --celebration-main: #22c55e;
+  --celebration-deep: #14532d;
+  --celebration-glow: rgba(34, 197, 94, 0.28);
+}
+
+.celebration-bad {
+  --celebration-main: #ef233c;
+  --celebration-deep: #7f1d1d;
+  --celebration-glow: rgba(239, 35, 60, 0.42);
+}
+
+.celebration-inconclusive {
+  --celebration-main: #facc15;
+  --celebration-deep: #854d0e;
+  --celebration-glow: rgba(250, 204, 21, 0.3);
+}
+
+.celebration-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 8px;
+  height: 16px;
+  border-radius: 2px;
+  background: linear-gradient(180deg, #fff7 0%, var(--celebration-main) 42%, var(--celebration-deep) 100%);
+  box-shadow: 0 0 14px var(--celebration-glow);
+  animation: confettiFall 3.9s cubic-bezier(0.2, 0.72, 0.26, 0.99) forwards;
+  animation-delay: var(--piece-delay);
+}
+
+.confetti-piece:nth-child(3n) {
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+}
+
+.confetti-piece:nth-child(4n) {
+  width: 14px;
+  height: 6px;
+}
+
+.celebration-center {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(92vw, 720px);
+  text-align: center;
+  animation: celebrationPop 4.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.celebration-center h2 {
+  margin-top: 1.25rem;
+  color: white;
+  font-size: clamp(3rem, 11vw, 7.5rem);
+  font-weight: 950;
+  line-height: 0.9;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  text-shadow: 0 0 34px var(--celebration-glow);
+}
+
+.celebration-center p {
+  color: rgba(255, 255, 255, 0.68);
+  font-size: clamp(1rem, 2.4vw, 1.35rem);
+}
+
+.celebration-kicker {
+  margin-top: 1.1rem;
+  color: var(--celebration-main) !important;
+  font-size: 0.78rem !important;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.ref-card-scene {
+  position: relative;
+  width: clamp(180px, 34vw, 340px);
+  height: clamp(240px, 42vw, 420px);
+  animation: cardSnap 4.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.ref-card {
+  position: absolute;
+  left: 16%;
+  top: 0;
+  width: 58%;
+  height: 68%;
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.28), transparent 28%),
+    linear-gradient(180deg, var(--celebration-main), var(--celebration-deep));
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.44),
+    0 0 56px var(--celebration-glow);
+}
+
+.ref-hand {
+  position: absolute;
+  right: 12%;
+  bottom: 16%;
+  width: 36%;
+  height: 34%;
+  border-radius: 44% 48% 38% 50%;
+  background:
+    radial-gradient(circle at 42% 32%, rgba(255, 255, 255, 0.32), transparent 16%),
+    linear-gradient(145deg, #f0b98f, #a76543);
+  box-shadow: inset -14px -16px 24px rgba(73, 35, 22, 0.26);
+}
+
+.ref-wrist {
+  position: absolute;
+  right: -1%;
+  bottom: -2%;
+  width: 30%;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(145deg, #e8aa80, #8d4f35);
+  transform: rotate(-34deg);
+  transform-origin: top;
+}
+
+.fair-burst {
+  display: grid;
+  place-items: center;
+  width: clamp(150px, 30vw, 280px);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.35), transparent 24%),
+    linear-gradient(145deg, #38ef7d, #047857);
+  box-shadow:
+    0 0 80px rgba(34, 197, 94, 0.44),
+    inset 0 -18px 36px rgba(0, 0, 0, 0.24);
+  animation: fairBurst 4.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.fair-burst span {
+  color: white;
+  font-size: clamp(5rem, 16vw, 11rem);
+  font-weight: 950;
+  line-height: 1;
+  text-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
 }
