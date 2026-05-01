@@ -7,15 +7,18 @@ import { GoogleAIFileManager } from "@google/generative-ai/server";
 import { z } from "zod";
 import type { AnalysisVerdict, Sport } from "@/types";
 
-const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-if (!apiKey) {
-  throw new Error(
-    "GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env file."
-  );
+function getClients() {
+  const apiKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  if (!apiKey) {
+    throw new Error(
+      "GOOGLE_GENERATIVE_AI_API_KEY is not set. Check your .env file."
+    );
+  }
+  return {
+    genAI: new GoogleGenerativeAI(apiKey),
+    fileManager: new GoogleAIFileManager(apiKey),
+  };
 }
-
-const genAI = new GoogleGenerativeAI(apiKey);
-const fileManager = new GoogleAIFileManager(apiKey);
 
 interface GeminiVideoFile {
   uri: string;
@@ -63,7 +66,7 @@ async function waitForGeminiFile(uploadedFile: GeminiUploadedFile): Promise<Gemi
     }
     await sleep(1500);
     attempts++;
-    file = (await fileManager.getFile(file.name)) as GeminiUploadedFile;
+    file = (await getClients().fileManager.getFile(file.name)) as GeminiUploadedFile;
   }
 
   if (file.state === "FAILED") {
@@ -87,6 +90,7 @@ async function uploadVideoToGemini(
   await writeFile(tempPath, Buffer.from(bytes));
 
   try {
+    const { fileManager } = getClients();
     const uploadResult = await fileManager.uploadFile(tempPath, {
       mimeType,
       displayName,
@@ -114,6 +118,7 @@ async function uploadUrlToGemini(videoUrl: string): Promise<GeminiVideoFile> {
 }
 
 export async function detectSport(videoFile: GeminiVideoFile): Promise<Sport> {
+  const { genAI } = getClients();
   const model = genAI.getGenerativeModel({ model: getModelName() });
 
   const prompt = `Watch this sports video clip and identify which sport is being played.
@@ -146,6 +151,7 @@ export async function analyzeCall(
 ): Promise<AnalysisVerdict> {
   const { systemPrompt } = await PROMPT_LOADERS[sport]();
 
+  const { genAI } = getClients();
   const model = genAI.getGenerativeModel({
     model: getModelName(),
     systemInstruction: systemPrompt,
