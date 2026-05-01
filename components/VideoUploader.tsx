@@ -2,10 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { upload } from "@vercel/blob/client";
 import { useAnalysisStore } from "@/store/useAnalysisStore";
 import type { AnalysisResult } from "@/types";
 
-const MAX_SIZE = 50 * 1024 * 1024;
+const MAX_SIZE = 500 * 1024 * 1024;
 const ACCEPTED = {
   "video/mp4": [".mp4"],
   "video/quicktime": [".mov"],
@@ -26,7 +27,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       if (rejected.length > 0) {
         const code = rejected[0].errors[0].code;
         if (code === "file-too-large") {
-          setUploadError("File exceeds 50MB limit.");
+          setUploadError("File exceeds 500MB limit.");
         } else if (code === "file-invalid-type") {
           setUploadError("Unsupported format. Use MP4, MOV, or WebM.");
         } else {
@@ -46,13 +47,16 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       setUploadStatus("uploading");
 
       try {
-        const formData = new FormData();
-        formData.append("video", file);
+        const blob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/upload-token",
+        });
 
         setUploadStatus("analyzing");
         const res = await fetch("/api/analyze", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ blobUrl: blob.url }),
         });
 
         if (!res.ok) {
@@ -121,7 +125,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
             <p className="text-white font-medium text-lg mb-1">
               {isDragActive ? "Drop it here" : "Drop your clip here"}
             </p>
-            <p className="text-white/50 text-sm">MP4, MOV, or WebM - Max 50MB</p>
+            <p className="text-white/50 text-sm">MP4, MOV, or WebM - Max 500MB</p>
           </>
         )}
       </div>
