@@ -6,6 +6,7 @@ import type { ApiError } from "@/types";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 const ACCEPTED_TYPES = ["video/mp4", "video/quicktime", "video/webm"];
+const CONFIDENCE_THRESHOLD = 80;
 
 const RequestSchema = z.object({
   blobUrl: z.string().url(),
@@ -72,10 +73,19 @@ export async function POST(req: NextRequest) {
       analysisInput = { type: "url", url: blobUrl };
     }
 
-    const { sport, verdict } =
+    const { sport, verdict: rawVerdict } =
       analysisInput.type === "file"
         ? await runAnalysisPipelineForFile(analysisInput.file)
         : await runAnalysisPipeline(analysisInput.url);
+
+    let verdict = rawVerdict;
+    if (verdict.confidence < CONFIDENCE_THRESHOLD && verdict.verdict !== "INCONCLUSIVE") {
+      verdict = {
+        ...verdict,
+        verdict: "INCONCLUSIVE",
+        reasoning: `${verdict.reasoning} (Model was leaning ${verdict.verdict} but confidence was too low to call definitively.)`,
+      };
+    }
 
     return NextResponse.json({
       id: crypto.randomUUID(),

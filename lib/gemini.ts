@@ -162,7 +162,7 @@ export async function analyzeCall(
 Use the JSON verdict values this app expects:
 - "FAIR" means the play/call/no-call is legal or correct.
 - "BAD" means the play is illegal, a violation/foul occurred, or the call/no-call was wrong.
-- "INCONCLUSIVE" means the video quality, camera angle, or available footage does not provide enough information to make a confident determination.
+- "INCONCLUSIVE" means any of the following: the video quality, camera angle, or available footage does not provide enough information to make a confident determination; OR the play involves a genuine judgment call where the evidence is mixed and reasonable officials could disagree; OR the relevant action is only partially visible and the rule's application depends on details that cannot be confirmed from this footage. Do NOT force a FAIR or BAD verdict when the evidence genuinely doesn't support one.
 
 Return ONLY a valid JSON object matching the required schema. No markdown, no preamble.`;
 
