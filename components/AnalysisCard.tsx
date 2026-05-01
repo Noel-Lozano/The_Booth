@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { RuleCitation } from "@/components/RuleCitation";
 import type { AnalysisResult, AnalysisVerdict } from "@/types";
 
