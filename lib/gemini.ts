@@ -52,7 +52,7 @@ const PROMPT_LOADERS: Record<Sport, () => Promise<{ systemPrompt: string }>> = {
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function getModelName() {
-  return process.env.GEMINI_MODEL ?? "gemini-2.0-flash-001";
+  return process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
 }
 
 async function waitForGeminiFile(uploadedFile: GeminiUploadedFile): Promise<GeminiVideoFile> {
