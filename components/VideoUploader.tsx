@@ -2,10 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
+import { upload } from "@vercel/blob/client";
 import { useAnalysisStore } from "@/store/useAnalysisStore";
 import type { AnalysisResult } from "@/types";
 
-const MAX_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_SIZE = 500 * 1024 * 1024; // 500MB — client-side upload bypasses serverless limit
 const ACCEPTED = {
   "video/mp4": [".mp4"],
   "video/quicktime": [".mov"],
@@ -27,7 +28,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       if (rejected.length > 0) {
         const code = rejected[0].errors[0].code;
         if (code === "file-too-large") {
-          setUploadError("File exceeds 50MB limit.");
+          setUploadError("File exceeds 500MB limit.");
         } else if (code === "file-invalid-type") {
           setUploadError("Unsupported format. Use MP4, MOV, or WebM.");
         } else {
@@ -39,27 +40,36 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       if (accepted.length === 0) return;
 
       const file = accepted[0];
-      setPreview(URL.createObjectURL(file));
+      setPreview((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return URL.createObjectURL(file);
+      });
       setUploadError(null);
       setUploadStatus("uploading");
 
       try {
-        const formData = new FormData();
-        formData.append("video", file);
-        if (originalCall.trim()) {
-          formData.append("originalCall", originalCall.trim());
-        }
+        // Upload directly from browser to Vercel Blob — bypasses serverless body limit
+        const blob = await upload(file.name, file, {
+          access: "public",
+          handleUploadUrl: "/api/upload-token",
+        });
+
+        setUploadStatus("analyzing");
 
         const res = await fetch("/api/analyze", {
           method: "POST",
-          body: formData,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            blobUrl: blob.url,
+            ...(originalCall.trim() ? { originalCall: originalCall.trim() } : {}),
+          }),
         });
 
         if (!res.ok) {
           const errorMessages: Record<string, string> = {
             SPORT_DETECTION_FAILED: "Sport could not be detected — try a clearer clip.",
             INVALID_MODEL_OUTPUT: "Analysis failed — the model returned an unexpected response. Try again.",
-            FILE_TOO_LARGE: "File exceeds 50MB — try a shorter or compressed clip.",
+            FILE_TOO_LARGE: "File too large — try a shorter or compressed clip.",
             INVALID_FORMAT: "Unsupported format. Use MP4, MOV, or WebM.",
             MISSING_FILE: "No video file found — try again.",
             SERVER_ERROR: "Something went wrong on our end — try again.",
@@ -72,7 +82,6 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
           throw new Error(errorMessages[err.code ?? ""] ?? err.error ?? "Upload failed.");
         }
 
-        setUploadStatus("analyzing");
         const result: AnalysisResult = await res.json();
         setDetectedSport(result.sport);
         setUploadStatus("done");
@@ -82,7 +91,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
         setUploadStatus("error");
       }
     },
-    [setUploadStatus, setUploadError, setDetectedSport, onResult]
+    [originalCall, setUploadStatus, setUploadError, setDetectedSport, onResult]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -113,6 +122,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
             className="mx-auto mb-6 max-h-48 rounded-xl object-cover"
             muted
             playsInline
+            controls
           />
         )}
 
@@ -130,13 +140,11 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
           </div>
         ) : (
           <>
-            <div className="text-5xl mb-4">🎬</div>
+            <div className="text-5xl mb-4" aria-hidden="true">🎬</div>
             <p className="text-white font-medium text-lg mb-1">
               {isDragActive ? "Drop it here" : "Drop your clip here"}
             </p>
-            <p className="text-white/50 text-sm">
-              MP4, MOV, or WebM · Max 50MB
-            </p>
+            <p className="text-white/50 text-sm">MP4, MOV, or WebM · Max 500MB</p>
           </>
         )}
       </div>

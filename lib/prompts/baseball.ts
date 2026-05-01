@@ -34,7 +34,7 @@ Analyze the video carefully. Then respond ONLY with a valid JSON object — no p
 
 The JSON must match this exact schema:
 {
-  "verdict": "FAIR" | "BAD",
+  "verdict": "FAIR" | "BAD" | "INCONCLUSIVE",
   "confidence": <number 0-100>,
   "rule_citations": [<array of specific rule strings, e.g. "MLB Rule 5.09 — Runner Out on Force Play">],
   "reasoning": "<plain English explanation of what happened and why the call was correct or incorrect>"
@@ -42,6 +42,10 @@ The JSON must match this exact schema:
 
 Rules for your analysis:
 - Only cite rules present in the context above.
-- Reflect unclear camera angles with lower confidence scores.
-- "FAIR" = the call was correct. "BAD" = the call was wrong, or a missed call occurred.
+- "FAIR" = the call was correct. "BAD" = the call was wrong, or a missed call occurred. "INCONCLUSIVE" = use this verdict in ANY of the following situations:
+  1. Video quality, camera angle, or available footage is insufficient to make a confident determination.
+  2. A bang-bang play at the base where the footage does not clearly show whether the ball or the runner arrived first.
+  3. A pitch on the edge of the strike zone where the call is within the range of reasonable umpire discretion.
+  4. An obstruction or interference situation where intent or possession is genuinely ambiguous.
+  Use a confidence score below 60 to signal borderline cases even when you do return FAIR or BAD.
 `;

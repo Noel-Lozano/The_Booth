@@ -12,6 +12,10 @@ Your task is to analyze the provided video clip and determine whether the offici
 - Handball: It is an offense if a player deliberately touches the ball with their hand/arm, including moving the hand/arm towards the ball. A goal scored by a hand/arm, even if accidental, is disallowed.
 - Penalty Kick: A penalty kick is awarded if a player commits a direct free kick offense inside their own penalty area.
 
+**Simulation / Diving (Law 12 — Unsporting Behavior):**
+- A player who attempts to deceive the referee by feigning injury or simulating a foul (diving) is guilty of unsporting behavior and should be cautioned with a yellow card.
+- CRITICAL AMBIGUITY — Contact + exaggeration: The hardest calls in soccer involve plays where real contact occurred but the player's reaction appears exaggerated. If a defender makes any contact with an attacker — even minimal leg contact, a brush, or a clip — and the attacker falls, the referee must judge whether the contact was sufficient to cause the fall or whether the player used the contact as a pretext to dive. This judgment is inherently subjective and cannot be resolved from video alone with high confidence. Experienced, qualified referees routinely disagree on these plays. When a clip shows contact occurred alongside a dramatic fall, do NOT confidently rule BAD (simulation) or FAIR (genuine foul) — the correct verdict is INCONCLUSIVE, because the line between "minimal contact that still caused the fall" and "minimal contact used as a pretext to dive" is a matter of real-time referee perception that no replay analysis can definitively resolve.
+
 **Offside (Law 11):**
 - A player is in an offside position if any part of the head, body, or feet is in the opponents' half and nearer to the opponents' goal line than both the ball and the second-to-last opponent.
 - A player in an offside position is only penalized if they are involved in active play — receiving the ball, interfering with an opponent, or gaining an advantage.
@@ -30,7 +34,7 @@ Analyze the video carefully. Then respond ONLY with a valid JSON object — no p
 
 The JSON must match this exact schema:
 {
-  "verdict": "FAIR" | "BAD",
+  "verdict": "FAIR" | "BAD" | "INCONCLUSIVE",
   "confidence": <number 0-100>,
   "rule_citations": [<array of specific rule strings, e.g. "FIFA Law 12 — Handball">],
   "reasoning": "<plain English explanation of what happened and why the call was correct or incorrect>"
@@ -38,6 +42,11 @@ The JSON must match this exact schema:
 
 Rules for your analysis:
 - Only cite rules present in the context above. Do not recall rules from training data not listed here.
-- If video quality or angle makes the call unclear, reflect that in a lower confidence score.
-- "FAIR" = the call (or no-call) was correct. "BAD" = the call was wrong, or a call should have been made and wasn't.
+- "FAIR" = the call (or no-call) was correct. "BAD" = the call was wrong, or a call should have been made and wasn't. "INCONCLUSIVE" = use this verdict in ANY of the following situations:
+  1. Video quality, camera angle, or available footage is insufficient to make a confident determination.
+  2. The play involves inherently subjective referee judgment — e.g., whether a foul was "careless," "reckless," or "excessive force"; whether handball was deliberate; whether advantage should have been played.
+  3. The play involves contact alongside an exaggerated fall — do not resolve simulation vs. genuine foul confidently; this is always INCONCLUSIVE.
+  4. The play sits in a legitimate gray area where different qualified referees would reasonably call it differently.
+  5. An offside call depends on a freeze-frame moment not clearly visible in the footage.
+  Use a confidence score below 60 to signal borderline cases even when you do return FAIR or BAD.
 `;

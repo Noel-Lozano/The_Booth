@@ -5,12 +5,12 @@ interface AnalysisCardProps {
   result: AnalysisResult;
 }
 
-const SPORT_EMOJI: Record<string, string> = {
-  basketball: "🏀",
-  soccer: "⚽",
-  baseball: "⚾",
-  football: "🏈",
-  hockey: "🏒",
+const SPORT_LABEL: Record<string, string> = {
+  basketball: "🏀 Basketball",
+  soccer: "⚽ Soccer",
+  baseball: "⚾ Baseball",
+  football: "🏈 Football",
+  hockey: "🏒 Hockey",
 };
 
 type VerdictConfig = Record<AnalysisVerdict["verdict"], { banner: string; text: string; label: string }>;
@@ -40,21 +40,22 @@ export function AnalysisCard({ result }: AnalysisCardProps) {
   return (
     <div className="w-full max-w-2xl mx-auto rounded-2xl overflow-hidden border border-white/10 bg-white/5 backdrop-blur-sm">
       {/* Verdict banner */}
-      <div className={`px-8 py-6 flex items-center justify-between ${config.banner}`}>
+      <div className={`px-8 py-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between ${config.banner}`}>
         <div>
           <p className="text-white/50 text-xs uppercase tracking-widest mb-1">
-            {SPORT_EMOJI[sport]} {sport.charAt(0).toUpperCase() + sport.slice(1)}
+            {SPORT_LABEL[sport] ?? sport}
             {originalCall && (
-              <span className="ml-2 normal-case text-white/30">· Original call: <span className="text-white/60">{originalCall}</span></span>
+              <span className="ml-2 normal-case text-white/30">
+                · Original call: <span className="text-white/60">{originalCall}</span>
+              </span>
             )}
           </p>
-          <h2 className={`text-4xl font-black tracking-tight ${config.text}`}>
+          <h2 className={`text-3xl sm:text-4xl font-black tracking-tight ${config.text}`}>
             {config.label}
           </h2>
         </div>
 
-        {/* Confidence dial */}
-        <div className="text-right">
+        <div className="sm:text-right">
           <p className="text-white/40 text-xs uppercase tracking-widest mb-1">Confidence</p>
           <p className="text-3xl font-bold text-white">{verdict.confidence}%</p>
         </div>
@@ -73,8 +74,8 @@ export function AnalysisCard({ result }: AnalysisCardProps) {
             Rule Citations
           </h3>
           <ul className="space-y-2">
-            {verdict.rule_citations.map((citation, i) => (
-              <RuleCitation key={i} citation={citation} />
+            {verdict.rule_citations.map((citation, index) => (
+              <RuleCitation key={`${citation}-${index}`} citation={citation} />
             ))}
           </ul>
         </div>
