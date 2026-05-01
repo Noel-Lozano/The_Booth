@@ -20,6 +20,7 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
   const { uploadStatus, uploadError, setUploadStatus, setUploadError, setDetectedSport, reset } =
     useAnalysisStore();
   const [preview, setPreview] = useState<string | null>(null);
+  const [originalCall, setOriginalCall] = useState("");
 
   const onDrop = useCallback(
     async (accepted: File[], rejected: import("react-dropzone").FileRejection[]) => {
@@ -45,6 +46,9 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
       try {
         const formData = new FormData();
         formData.append("video", file);
+        if (originalCall.trim()) {
+          formData.append("originalCall", originalCall.trim());
+        }
 
         const res = await fetch("/api/analyze", {
           method: "POST",
@@ -52,8 +56,20 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
         });
 
         if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.error ?? "Upload failed");
+          const errorMessages: Record<string, string> = {
+            SPORT_DETECTION_FAILED: "Sport could not be detected — try a clearer clip.",
+            INVALID_MODEL_OUTPUT: "Analysis failed — the model returned an unexpected response. Try again.",
+            FILE_TOO_LARGE: "File exceeds 50MB — try a shorter or compressed clip.",
+            INVALID_FORMAT: "Unsupported format. Use MP4, MOV, or WebM.",
+            MISSING_FILE: "No video file found — try again.",
+            SERVER_ERROR: "Something went wrong on our end — try again.",
+          };
+          if (res.status === 413) {
+            throw new Error("File too large for the server — try a shorter or compressed clip.");
+          }
+          let err: { code?: string; error?: string } = {};
+          try { err = await res.json(); } catch { /* non-JSON error response */ }
+          throw new Error(errorMessages[err.code ?? ""] ?? err.error ?? "Upload failed.");
         }
 
         setUploadStatus("analyzing");
@@ -102,9 +118,14 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
 
         {isLoading ? (
           <div className="flex flex-col items-center gap-3">
-            <div className="w-10 h-10 border-2 border-yellow-400 border-t-transparent rounded-full animate-spin" />
-            <p className="text-white/70 text-sm">
-              {uploadStatus === "uploading" ? "Uploading video..." : "Analyzing with AI..."}
+            <div className={`w-10 h-10 border-2 border-t-transparent rounded-full animate-spin ${
+              uploadStatus === "uploading" ? "border-white/40" : "border-yellow-400"
+            }`} />
+            <p className="text-white font-medium text-sm">
+              {uploadStatus === "uploading" ? "Uploading video..." : "Analyzing with Gemini..."}
+            </p>
+            <p className="text-white/40 text-xs">
+              {uploadStatus === "uploading" ? "Sending to Vercel Blob" : "This takes around 30 seconds"}
             </p>
           </div>
         ) : (
@@ -119,6 +140,19 @@ export function VideoUploader({ onResult }: VideoUploaderProps) {
           </>
         )}
       </div>
+
+      {/* Original call input */}
+      {!isLoading && (
+        <div className="mt-4">
+          <input
+            type="text"
+            value={originalCall}
+            onChange={(e) => setOriginalCall(e.target.value)}
+            placeholder="Original referee call (optional) — e.g. Blocking foul"
+            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-white/30 focus:outline-none focus:border-white/30 transition-colors"
+          />
+        </div>
+      )}
 
       {uploadError && (
         <p className="mt-3 text-red-400 text-sm text-center">{uploadError}</p>

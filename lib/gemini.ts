@@ -14,7 +14,7 @@ const genAI = new GoogleGenerativeAI(apiKey);
 
 // Zod schema for Gemini response validation
 export const VerdictSchema = z.object({
-  verdict: z.enum(["FAIR", "BAD"]),
+  verdict: z.enum(["FAIR", "BAD", "INCONCLUSIVE"]),
   confidence: z.number().min(0).max(100),
   rule_citations: z.array(z.string()),
   reasoning: z.string(),
@@ -53,7 +53,8 @@ Do not include any other text.`;
 // Pass 2 — Full rule-grounded analysis
 export async function analyzeCall(
   videoUrl: string,
-  sport: Sport
+  sport: Sport,
+  originalCall?: string
 ): Promise<AnalysisVerdict> {
   // Dynamically import sport-specific rulebook prompt
   const { systemPrompt } = await import(`@/lib/prompts/${sport}`);
@@ -63,7 +64,19 @@ export async function analyzeCall(
     systemInstruction: systemPrompt,
   });
 
-  const userPrompt = `Analyze this ${sport} video clip and determine if the officiating call was correct.
+  const callContext = originalCall
+    ? `The original referee call was: "${originalCall}". Evaluate whether this call was correct.`
+    : "No original call was provided. Evaluate whether any call made (or not made) appears correct.";
+
+  const userPrompt = `Analyze this ${sport} video clip and determine if the officiating decision was correct.
+
+${callContext}
+
+Return your verdict as one of exactly three options:
+- "FAIR" — the call was correct based on the rules
+- "BAD" — the call was incorrect based on the rules
+- "INCONCLUSIVE" — the video angle, quality, or available information is insufficient to make a confident judgment
+
 Return ONLY a valid JSON object matching the required schema. No markdown, no preamble.`;
 
   const result = await model.generateContent([
@@ -99,11 +112,14 @@ Return ONLY a valid JSON object matching the required schema. No markdown, no pr
 }
 
 // Two-pass pipeline — main entry point
-export async function runAnalysisPipeline(videoUrl: string): Promise<{
+export async function runAnalysisPipeline(
+  videoUrl: string,
+  originalCall?: string
+): Promise<{
   sport: Sport;
   verdict: AnalysisVerdict;
 }> {
   const sport = await detectSport(videoUrl);
-  const verdict = await analyzeCall(videoUrl, sport);
+  const verdict = await analyzeCall(videoUrl, sport, originalCall);
   return { sport, verdict };
 }

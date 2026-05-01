@@ -109,8 +109,8 @@ Rules:
 Purpose: multimodal video + text analysis — sport detection and call analysis.
 
 Rules:
-- **Production model:** `gemini-1.5-pro`
-- **Dev/testing only:** `gemini-1.5-flash` (never in production paths)
+- **Production model:** `gemini-2.5-pro`
+- **Dev/testing only:** `gemini-2.5-flash` (never in production paths)
 - Use the official `@google/generative-ai` SDK — do not call the REST API directly
 - All Gemini logic lives in `lib/gemini.ts` only — route handlers import from there
 - See `docs/03_AI_PIPELINE.md` for the full pipeline spec

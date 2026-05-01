@@ -1,7 +1,7 @@
 export type Sport = "basketball" | "soccer" | "baseball" | "football" | "hockey";
 
 export interface AnalysisVerdict {
-  verdict: "FAIR" | "BAD";
+  verdict: "FAIR" | "BAD" | "INCONCLUSIVE";
   confidence: number; // 0-100
   rule_citations: string[]; // e.g. ["NBA Rule 12, Section II(a)"]
   reasoning: string; // plain English explanation
@@ -13,6 +13,7 @@ export interface AnalysisResult {
   verdict: AnalysisVerdict;
   blobUrl: string;
   createdAt: string;
+  originalCall?: string;
 }
 
 export interface ApiError {

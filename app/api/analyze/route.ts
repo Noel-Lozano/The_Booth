@@ -17,11 +17,16 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get("content-type") ?? "";
 
     let blobUrl: string;
+    let originalCall: string | undefined;
 
     if (contentType.includes("multipart/form-data")) {
       // Handle direct file upload
       const formData = await req.formData();
       const file = formData.get("video") as File | null;
+      const rawCall = formData.get("originalCall");
+      if (typeof rawCall === "string" && rawCall.trim()) {
+        originalCall = rawCall.trim();
+      }
 
       if (!file) {
         return NextResponse.json<ApiError>(
@@ -71,7 +76,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Run two-pass Gemini pipeline
-    const { sport, verdict } = await runAnalysisPipeline(blobUrl);
+    const { sport, verdict } = await runAnalysisPipeline(blobUrl, originalCall);
 
     const id = crypto.randomUUID();
 
@@ -81,6 +86,7 @@ export async function POST(req: NextRequest) {
       verdict,
       blobUrl,
       createdAt: new Date().toISOString(),
+      ...(originalCall ? { originalCall } : {}),
     });
   } catch (err) {
     console.error("[/api/analyze] Error:", err);
